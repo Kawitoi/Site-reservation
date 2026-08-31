@@ -46,8 +46,8 @@ export function formatTimeLabel(instant: Date, timezone: string): string {
 }
 
 /** "today" in the given timezone, as a "YYYY-MM-DD" string. */
-export function todayInZone(timezone: string): string {
-  return formatInTimeZone(new Date(), timezone, "yyyy-MM-dd");
+export function todayInZone(timezone: string, now: Date = new Date()): string {
+  return formatInTimeZone(now, timezone, "yyyy-MM-dd");
 }
 
 export function isValidDateString(value: string): boolean {

@@ -124,9 +124,9 @@ export function computeAvailableSlots(input: {
 
   if (partySize > config.maxPartySize) return [];
 
-  const horizon = addDaysToDateString(todayInZone(timezone), config.maxBookingDaysAhead);
+  const horizon = addDaysToDateString(todayInZone(timezone, now), config.maxBookingDaysAhead);
   if (date > horizon) return [];
-  if (date < todayInZone(timezone)) return [];
+  if (date < todayInZone(timezone, now)) return [];
 
   const weekday = dateStringWeekday(date);
   const windows = getOpenWindowsForDay(config, weekday);
