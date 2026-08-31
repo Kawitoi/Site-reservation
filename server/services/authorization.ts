@@ -1,8 +1,10 @@
 import "server-only";
-import { headers } from "next/headers";
+import { headers, cookies } from "next/headers";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import type { Role } from "@/lib/permissions";
+
+export const LOCATION_COOKIE = "tf_location_id";
 
 /**
  * Central authorization layer. Every Server Action and Route Handler that
@@ -91,4 +93,30 @@ export async function requireUserOrganization() {
 
   if (!member) throw new ForbiddenError("Aucune organisation associée à ce compte.");
   return { session, member, organization: member.organization };
+}
+
+/**
+ * Full context needed by every (app) route: session, membership, all of the
+ * org's locations, and the currently selected one. The selection is read
+ * from a cookie — a purely visual preference (spec section 3: "dernier
+ * établissement sélectionné" is explicitly allowed in client storage) — but
+ * is always re-validated against the DB-derived organization before use.
+ */
+export async function requireAppContext() {
+  const { session, member, organization } = await requireUserOrganization();
+
+  const locations = await db.restaurantLocation.findMany({
+    where: { organizationId: organization.id },
+    orderBy: { createdAt: "asc" },
+  });
+
+  if (locations.length === 0) {
+    throw new ForbiddenError("Aucun établissement configuré.");
+  }
+
+  const cookieStore = await cookies();
+  const selectedId = cookieStore.get(LOCATION_COOKIE)?.value;
+  const currentLocation = locations.find((l) => l.id === selectedId) ?? locations[0];
+
+  return { session, member, organization, locations, currentLocation };
 }
