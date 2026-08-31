@@ -1,0 +1,385 @@
+// TableFlow database schema.
+//
+// Two families of models live here:
+// - Better Auth core + organization plugin tables (User, Session, Account,
+//   Verification, Organization, Member, Invitation). Field shapes mirror
+//   exactly what better-auth@1.7.2 expects from its Prisma adapter, so do not
+//   rename/retype fields without checking lib/auth.ts and the adapter output.
+// - TableFlow business models (RestaurantLocation, Table, Reservation, ...).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Better Auth: core tables
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String   @id @default(cuid())
+  name          String
+  email         String   @unique
+  emailVerified Boolean  @default(false)
+  image         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  sessions         Session[]
+  accounts         Account[]
+  members          Member[]
+  invitationsSent  Invitation[] @relation("InvitationInviter")
+  auditLogs        AuditLog[]
+
+  @@map("user")
+}
+
+model Session {
+  id                   String   @id @default(cuid())
+  expiresAt            DateTime
+  token                String   @unique
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  ipAddress            String?
+  userAgent            String?
+  userId               String
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activeOrganizationId String?
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  issuer                String
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@unique([issuer, accountId])
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+// ---------------------------------------------------------------------------
+// Better Auth: organization plugin tables
+// ---------------------------------------------------------------------------
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  logo      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members      Member[]
+  invitations  Invitation[]
+  locations    RestaurantLocation[]
+  customers    Customer[]
+  reservations Reservation[]
+  subscription Subscription?
+  auditLogs    AuditLog[]
+
+  @@map("organization")
+}
+
+// Roles are plain strings ("owner" | "manager" | "staff"), enforced in
+// lib/server/authorization.ts rather than through better-auth's dynamic
+// access-control plugin — see spec section 9: "ne pas créer un système RBAC
+// excessivement complexe".
+model Member {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           String       @default("staff")
+  createdAt      DateTime     @default(now())
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+  @@map("member")
+}
+
+model Invitation {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email          String
+  role           String
+  status         String       @default("pending")
+  expiresAt      DateTime
+  createdAt      DateTime     @default(now())
+  inviterId      String
+  inviter        User         @relation("InvitationInviter", fields: [inviterId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([email])
+  @@map("invitation")
+}
+
+// ---------------------------------------------------------------------------
+// TableFlow business models
+// ---------------------------------------------------------------------------
+
+model RestaurantLocation {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  name       String
+  phone      String?
+  address    String?
+  city       String?
+  postalCode String?
+  country    String?
+  timezone   String   @default("Europe/Paris")
+  publicSlug String   @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  settings     RestaurantSettings?
+  tables       Table[]
+  reservations Reservation[]
+  closures     SpecialClosure[]
+
+  @@index([organizationId])
+  @@map("restaurant_location")
+}
+
+model RestaurantSettings {
+  id         String             @id @default(cuid())
+  locationId String             @unique
+  location   RestaurantLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  defaultReservationDurationMinutes Int @default(120)
+  bookingIntervalMinutes            Int @default(30)
+
+  // Global service windows ("HH:mm" 24h strings), null = service not configured.
+  lunchOpensAt   String?
+  lunchClosesAt  String?
+  dinnerOpensAt  String?
+  dinnerClosesAt String?
+
+  // Per weekday (0=Sunday..6=Saturday) open/closed flags for each service.
+  // Shape: { "0": { "lunch": true, "dinner": false }, "1": { ... }, ... }
+  weeklySchedule Json @default("{\"0\":{\"lunch\":true,\"dinner\":true},\"1\":{\"lunch\":true,\"dinner\":true},\"2\":{\"lunch\":true,\"dinner\":true},\"3\":{\"lunch\":true,\"dinner\":true},\"4\":{\"lunch\":true,\"dinner\":true},\"5\":{\"lunch\":true,\"dinner\":true},\"6\":{\"lunch\":true,\"dinner\":true}}")
+
+  publicBookingEnabled         Boolean @default(true)
+  notifyOnNewPublicBooking     Boolean @default(true)
+  maxPartySize                 Int     @default(10)
+  minimumBookingNoticeMinutes  Int     @default(60)
+  maxBookingDaysAhead          Int     @default(60)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("restaurant_settings")
+}
+
+enum TableShape {
+  RECTANGLE
+  ROUND
+}
+
+model Table {
+  id         String             @id @default(cuid())
+  locationId String
+  location   RestaurantLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  name   String
+  seats  Int
+  x      Float @default(0)
+  y      Float @default(0)
+  width  Float @default(80)
+  height Float @default(80)
+  shape  TableShape @default(RECTANGLE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  reservations Reservation[]
+
+  @@index([locationId])
+  @@map("table")
+}
+
+model Customer {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  name         String
+  phone        String?
+  email        String?
+  notes        String?
+  anonymizedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  reservations Reservation[]
+
+  @@index([organizationId])
+  @@index([organizationId, phone])
+  @@map("customer")
+}
+
+enum ReservationSource {
+  PHONE
+  WEBSITE
+  MANUAL
+  OTHER
+}
+
+enum ReservationStatus {
+  CONFIRMED
+  CANCELLED
+}
+
+model Reservation {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  locationId     String
+  location       RestaurantLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  tableId        String?
+  table          Table?       @relation(fields: [tableId], references: [id], onDelete: SetNull)
+  customerId     String?
+  customer       Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  customerName  String
+  customerPhone String?
+  customerEmail String?
+  partySize     Int
+  startAt       DateTime
+  endAt         DateTime
+  source        ReservationSource @default(MANUAL)
+  status        ReservationStatus @default(CONFIRMED)
+  notes         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([locationId, startAt])
+  @@index([locationId, tableId, startAt])
+  @@index([customerId])
+  @@index([organizationId])
+  @@map("reservation")
+}
+
+model SpecialClosure {
+  id         String             @id @default(cuid())
+  locationId String
+  location   RestaurantLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  startAt DateTime
+  endAt   DateTime
+  reason  String?
+
+  createdAt DateTime @default(now())
+
+  @@index([locationId, startAt])
+  @@map("special_closure")
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  UNPAID
+  INCOMPLETE
+  INCOMPLETE_EXPIRED
+}
+
+model Subscription {
+  id             String       @id @default(cuid())
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  stripeCustomerId     String? @unique
+  stripeSubscriptionId String? @unique
+  stripePriceId        String?
+  status               SubscriptionStatus @default(TRIALING)
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("subscription")
+}
+
+model ProcessedWebhook {
+  id            String   @id @default(cuid())
+  stripeEventId String   @unique
+  type          String
+  processedAt   DateTime @default(now())
+
+  @@map("processed_webhook")
+}
+
+enum AuditAction {
+  RESERVATION_CREATED
+  RESERVATION_UPDATED
+  RESERVATION_DELETED
+  TABLE_CREATED
+  TABLE_UPDATED
+  TABLE_DELETED
+  SETTINGS_UPDATED
+  MEMBER_INVITED
+  MEMBER_REMOVED
+  MEMBER_ROLE_UPDATED
+  LOCATION_CREATED
+  LOCATION_UPDATED
+  CUSTOMER_UPDATED
+  CUSTOMER_DELETED
+}
+
+model AuditLog {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String?
+  user           User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  action     AuditAction
+  entityType String
+  entityId   String?
+  metadata   Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId, createdAt])
+  @@map("audit_log")
+}
