@@ -15,6 +15,15 @@ control (owner / manager / staff) with strict per-restaurant data isolation.
 - Vitest (unit/integration) + Playwright (E2E)
 - Tailwind CSS v4 + Radix UI primitives
 
+## Quickest way to try it: GitHub Codespaces
+
+This repo includes a `.devcontainer/` config that starts the app and a
+PostgreSQL 16 instance as separate containers automatically — no local
+install needed. On GitHub, **Code → Codespaces → Create codespace**, wait
+for `postCreateCommand` to finish (installs deps, applies migrations,
+seeds demo data), then run `npm run dev` in the terminal and open the
+forwarded port 3000. Demo login: `demo@tableflow.local` / `demo12345`.
+
 ## Prerequisites
 
 - Node.js 22+
