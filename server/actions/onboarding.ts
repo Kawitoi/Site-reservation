@@ -75,6 +75,7 @@ export async function completeSignup(rawInput: unknown): Promise<ActionResult> {
         data: {
           organizationId: organization.id,
           name: input.restaurantName,
+          email: input.email,
           phone: input.phone || null,
           address: input.address || null,
           timezone: "Europe/Paris",

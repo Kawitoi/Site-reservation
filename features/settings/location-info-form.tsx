@@ -15,6 +15,7 @@ export function LocationInfoForm({
 }: {
   location: {
     name: string;
+    email: string | null;
     phone: string | null;
     address: string | null;
     city: string | null;
@@ -27,6 +28,7 @@ export function LocationInfoForm({
   const router = useRouter();
   const [values, setValues] = useState({
     name: location.name,
+    email: location.email ?? "",
     phone: location.phone ?? "",
     address: location.address ?? "",
     city: location.city ?? "",
@@ -72,19 +74,27 @@ export function LocationInfoForm({
             <Input id="li-name" required value={values.name} onChange={(e) => update("name", e.target.value)} />
           </Field>
           <div className="grid grid-cols-2 gap-4">
+            <Field label="Email" htmlFor="li-email">
+              <Input
+                id="li-email"
+                type="email"
+                value={values.email}
+                onChange={(e) => update("email", e.target.value)}
+              />
+            </Field>
             <Field label="Téléphone" htmlFor="li-phone">
               <Input id="li-phone" value={values.phone} onChange={(e) => update("phone", e.target.value)} />
             </Field>
-            <Field label="Adresse publique (slug)" htmlFor="li-slug" required>
-              <Input
-                id="li-slug"
-                required
-                value={values.publicSlug}
-                onChange={(e) => update("publicSlug", e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">/book/{values.publicSlug || "..."}</p>
-            </Field>
           </div>
+          <Field label="Adresse publique (slug)" htmlFor="li-slug" required>
+            <Input
+              id="li-slug"
+              required
+              value={values.publicSlug}
+              onChange={(e) => update("publicSlug", e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">/book/{values.publicSlug || "..."}</p>
+          </Field>
           <Field label="Adresse" htmlFor="li-address">
             <Input id="li-address" value={values.address} onChange={(e) => update("address", e.target.value)} />
           </Field>

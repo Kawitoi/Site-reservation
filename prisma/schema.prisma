@@ -156,6 +156,7 @@ model RestaurantLocation {
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   name       String
+  email      String?
   phone      String?
   address    String?
   city       String?
@@ -289,6 +290,14 @@ model Reservation {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  /// Generated column (tsrange of startAt/endAt) backing the
+  /// reservation_no_overlap EXCLUDE constraint — see
+  /// prisma/migrations/20260831121500_reservation_no_overlap_constraint.
+  /// Declared as Unsupported so Prisma tracks its presence instead of
+  /// proposing to drop it on every future `migrate dev` diff; it is never
+  /// read or written through the Prisma Client.
+  duration Unsupported("tsrange")?
 
   @@index([locationId, startAt])
   @@index([locationId, tableId, startAt])

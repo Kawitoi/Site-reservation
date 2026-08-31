@@ -6,6 +6,7 @@ const slugRegex = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 export const locationInfoSchema = z.object({
   locationId: z.string().min(1),
   name: z.string().trim().min(1, "Le nom est requis").max(120),
+  email: z.email().max(160).optional().or(z.literal("")),
   phone: z.string().trim().max(30).optional().or(z.literal("")),
   address: z.string().trim().max(200).optional().or(z.literal("")),
   city: z.string().trim().max(100).optional().or(z.literal("")),
@@ -65,6 +66,7 @@ export type ServicesSettingsInput = z.infer<typeof servicesSettingsSchema>;
 
 export const createLocationSchema = z.object({
   name: z.string().trim().min(1, "Le nom est requis").max(120),
+  email: z.email().max(160).optional().or(z.literal("")),
   phone: z.string().trim().max(30).optional().or(z.literal("")),
   address: z.string().trim().max(200).optional().or(z.literal("")),
   city: z.string().trim().max(100).optional().or(z.literal("")),

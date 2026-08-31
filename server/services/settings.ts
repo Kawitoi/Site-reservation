@@ -33,6 +33,7 @@ export async function updateLocationInfo(input: LocationInfoInput, ctx: { organi
       where: { id: input.locationId },
       data: {
         name: input.name,
+        email: input.email || null,
         phone: input.phone || null,
         address: input.address || null,
         city: input.city || null,
@@ -128,6 +129,7 @@ export async function createLocation(input: CreateLocationInput, ctx: { organiza
       data: {
         organizationId: ctx.organizationId,
         name: input.name,
+        email: input.email || null,
         phone: input.phone || null,
         address: input.address || null,
         city: input.city || null,
