@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { defineConfig, devices } from "@playwright/test";
 
 /**
@@ -5,6 +6,15 @@ import { defineConfig, devices } from "@playwright/test";
  * README for the `DATABASE_URL` this must be invoked with. Never point
  * this at the dev or production database (spec section 134).
  */
+
+// Some sandboxes pre-install Chromium outside Playwright's normal cache
+// (see PLAYWRIGHT_BROWSERS_PATH). Use it only when present; otherwise fall
+// back to Playwright's own managed browser (the case on CI runners, where
+// `playwright install` puts it in the default location).
+const SANDBOX_CHROMIUM_PATH = "/opt/pw-browsers/chromium";
+const chromiumExecutablePath =
+  process.env.PLAYWRIGHT_CHROMIUM_PATH ?? (existsSync(SANDBOX_CHROMIUM_PATH) ? SANDBOX_CHROMIUM_PATH : undefined);
+
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: false,
@@ -22,7 +32,7 @@ export default defineConfig({
       use: {
         ...devices["Desktop Chrome"],
         launchOptions: {
-          executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH || "/opt/pw-browsers/chromium",
+          executablePath: chromiumExecutablePath,
         },
       },
     },

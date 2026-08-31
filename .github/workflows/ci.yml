@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  NODE_VERSION: "22"
+  DEV_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tableflow_dev?schema=public
+  TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tableflow_test?schema=public
+  BETTER_AUTH_SECRET: ci-secret-do-not-use-in-production-0123456789
+  APP_URL: http://localhost:3000
+  NEXT_PUBLIC_APP_URL: http://localhost:3000
+
+jobs:
+  quality:
+    name: Lint, typecheck, tests, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+        env:
+          DATABASE_URL: ${{ env.DEV_DATABASE_URL }}
+
+      - name: Create application databases
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE tableflow_dev;"
+          PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE tableflow_test;"
+
+      - name: Apply migrations (dev database)
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ env.DEV_DATABASE_URL }}
+
+      - name: Apply migrations (test database)
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit + integration tests
+        run: npm test
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E tests
+        run: npm run test:e2e
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+      - name: Build
+        run: npm run build
+        env:
+          DATABASE_URL: ${{ env.DEV_DATABASE_URL }}
